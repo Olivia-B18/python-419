@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Packaging output
+*.egg-info/
+*.dist-info/
+build/
+dist/
+
+# Notebook and editor output
+.ipynb_checkpoints/
+.DS_Store
+
+# Generated data
+spotifysongs/data/*
