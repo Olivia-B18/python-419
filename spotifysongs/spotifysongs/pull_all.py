@@ -10,7 +10,24 @@ DATA: raw_data/*
 from pathlib import Path
 import os
 import pandas as pd
-from helpers import is_csv
+
+def is_csv(file_path: Path = None):
+    """
+    Check if given file is a csv.
+    Source: https://www.geeksforgeeks.org/python/python-loop-through-folders-and-files-in-directory/
+    """
+    try:
+        pd.read_csv(file_path, nrows=1) 
+        return True
+    except pd.errors.ParserError:
+        print("Pandas failed to parse the file as CSV.")
+        return False
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        return False
+    except UnicodeDecodeError:
+        print(f"Error: File '{file_path}' is not text-based.")
+        return False
 
 ###########################
 # LOAD RAW DATA

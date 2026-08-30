@@ -1,9 +1,12 @@
-"""
+'''
 Olivia Buchanan
-Homework 0: Python Practice
-"""
+Python Practice
+'''
 
-# various variables
+#####################################
+# SET VARIABLES
+#####################################
+
 HAL = 9000
 Bridge = "4"
 Nahn = [2]
@@ -13,7 +16,10 @@ Poppins = set("supercalifragilisticexpialidocious")
 WALL = [["E"]]
 K = {"2SO"}
 
-# dictionaries
+#####################################
+# SET DICTIONARIES
+#####################################
+
 Galactica = {"Karl":"Helo",
              "Kara":"Starbuck",
              "Lee":"Apollo",
@@ -29,110 +35,102 @@ Wheel = {"Blue": ["Moiraine", "Siuan"],
          "Plaid": [],
          "Red": ["Elaida", "Liandrin"],
          }
-
 Wheel["Brown"] = ["Verin", "Saerin", "Janya"]
 Wheel["Green"].append("Egweyne")
 Wheel["Red"].remove("Liandrin")
 Wheel["Yellow"].append("Nynaeve")
 del Wheel["Plaid"]
 
-# university levels
+#####################################
+# SET UNIVERSITY LEVELS
+#####################################
+
 Germanna_levels = ["Freshman", "Sophomore"]
 UMW_levels = ["Freshman", "Sophomore", "Junior", "Senior"]
 MaryWash_levels = UMW_levels
 CNU_levels = UMW_levels.copy()
 
-def plus2(inputNum):
-    """
-    Returns the input number plus 2.
-    """
-    if type(inputNum) == int or type(inputNum) == float:
-        return inputNum + 2
+#######################################
+# FUNCTIONS
+########################################
 
-theSet = {"Navani", "Shallan", "Jasnah"}
+def plus2(num: int):
+    """
+    Return input num plus 2.
+    """
+    return num + 2
+
+DAT_SET = {"Navani", "Shallan", "Jasnah"}
 def gimme_dat_set():
     """
-    Returns the same set object per call.
+    Return constant DAT_SET.
     """
-    datSet = theSet
-    return datSet
+    return DAT_SET
 
 def gimme_set_like_dat():
     """
-    Returns a different set object per call
+    Return a different set object per call.
     """
     return {"Kaladin", "Dalinar", "Adolin"}
 
-def center(inputString):
+def center(input_string: str):
     """
-    Returns the center letters of the input string.
+    Return center letter of input_string.
     """
+    strlen = len(input_string)
+    if strlen == 0: # Empty string
+        return None
+    elif strlen % 2 == 1: # Odd length
+        return input_string[strlen // 2]
+    else: # Even length
+        return input_string[strlen // 2 - 1:
+                           strlen // 2 + 1]
 
-    if type(inputString) == str:
-        strLen = len(inputString)
+def nuke_last(input_list: list, input_element: str):
+    """
+    If input_element is in input_list, remove only the last instance of it.
+    """
+    if input_element in input_list:
+        input_list.reverse()
+        input_list.remove(input_element)
+        input_list.reverse()
 
-        if strLen == 0:
-            return None
-        elif strLen % 2 == 0:
-            return inputString[(strLen // 2 - 1):(strLen // 2 + 1)]
+def middlest(num1: int, num2: int, num3: int):
+    """
+    Returns the middle number of three numbers.
+    """
+    nums = [num1, num2, num3]
+    nums.sort()
+    return nums[1]
+
+def tack_on_end(input_list: list,
+                add_this: list | str | int | float,
+                times_to_repeat: int = 1):
+    """
+    Append the item(s) in add_this to list1 times_to_repeat times.
+    """
+    for _ in range(times_to_repeat):
+        if isinstance(add_this, list):
+            input_list.extend(add_this)
         else:
-            return inputString[strLen // 2]
+            input_list.append(add_this)
 
-def nuke_last(inputList, inputItem):
+def wondrous_count(num: int):
     """
-    Removes the last element in the list with the 
-    same value as the item.
+    Give the number of steps needed to reach 1 using Collatz Conjecture.
     """
+    steps = 0
+    while num > 1:
+        if num % 2 == 0:
+            num = num // 2
+        elif num % 2 == 1:
+            num = num * 3 + 1
+        steps += 1
+    return steps
 
-    if type(inputList) == list:
-        inputList.reverse()
-        inputList.remove(inputItem)
-        inputList.reverse()
-
-def middlest(inputNum1, inputNum2, inputNum3):
+def unique_vals(input_dict: dict):
     """
-    Returns the middle number of the given numbers.
+    Return a list of the unique values in input_dict.
     """
+    return list(set(input_dict.values()))
 
-    listNums = [inputNum1, inputNum2, inputNum3]
-    listNums.sort()
-    return listNums[1]
-
-def tack_on_end(inputList, inputVar, repeatCount=1):
-    """
-    Adds the value(s) in inputVar to inputList as many
-    times as in repeatCount.
-    """
-
-    # need to iterate differently depending on type of inputVar
-    if type(inputVar) == list:
-        for _ in range(repeatCount):
-            inputList.extend(inputVar)
-    else:
-        for _ in range(repeatCount):
-            inputList.append(inputVar)
-
-def wondrous_count(inputNum):
-    """
-    Returns the number of steps required to reach 1
-    from the number in a Collatz sequence.
-    """
-
-    count = 0
-
-    while (inputNum > 1):
-        if inputNum % 2 == 0:
-            inputNum = inputNum // 2
-        else:
-            inputNum = inputNum * 3 + 1
-        count += 1
-
-    return count
-
-def unique_vals(inputDict):
-    """
-    Returns a list of unique elements from the
-    input dictionary.
-    """
-
-    return list(set(inputDict.values()))
