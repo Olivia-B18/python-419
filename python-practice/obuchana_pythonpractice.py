@@ -53,29 +53,50 @@ CNU_levels = UMW_levels.copy()
 #######################################
 # FUNCTIONS
 ########################################
-
 def plus2(num: int):
     """
     Return input num plus 2.
+
+    Parameters:
+        num (int): Input number.
+
+    Returns:
+        int: Sum of num and 2.
     """
     return num + 2
 
 DAT_SET = {"Navani", "Shallan", "Jasnah"}
 def gimme_dat_set():
     """
-    Return constant DAT_SET.
+    Return the same set object.
+
+    Parameters: None
+
+    Returns:
+        set: Constant DAT_SET
     """
     return DAT_SET
 
 def gimme_set_like_dat():
     """
-    Return a different set object per call.
+    Return a different set object but with same values every call.
+
+    Parameters: None
+
+    Returns:
+        set: A new set with the same values.
     """
     return {"Kaladin", "Dalinar", "Adolin"}
 
 def center(input_string: str):
     """
-    Return center letter of input_string.
+    Return middle letter(s) of a string
+
+    Parameters:
+        input_string (str): Input string.
+
+    Returns:
+        str: The middle letter(s) of input_string
     """
     strlen = len(input_string)
     if strlen == 0: # Empty string
@@ -88,7 +109,13 @@ def center(input_string: str):
 
 def nuke_last(input_list: list, input_element: str):
     """
-    If input_element is in input_list, remove only the last instance of it.
+    Remove last instance of an element in a list.
+
+    Parameters:
+        input_list (list): Input list.
+        input_element (str): Element to remove.
+
+    Returns: None
     """
     if input_element in input_list:
         input_list.reverse()
@@ -97,7 +124,15 @@ def nuke_last(input_list: list, input_element: str):
 
 def middlest(num1: int, num2: int, num3: int):
     """
-    Returns the middle number of three numbers.
+    Returns the middle number of three numbers, in order.
+
+    Parameters:
+        num1 (int): First number.
+        num2 (int): Second number.
+        num3 (int): Third number.
+
+    Returns:
+        int: the middle number of the three numbers, in order.
     """
     nums = [num1, num2, num3]
     nums.sort()
@@ -107,7 +142,14 @@ def tack_on_end(input_list: list,
                 add_this: list | str | int | float,
                 times_to_repeat: int = 1):
     """
-    Append the item(s) in add_this to list1 times_to_repeat times.
+    Append the item(s) in add_this to list1.
+
+    Parameters:
+        input_list (list): Input list.
+        add_this (list | str | int | float): Item(s) to append.
+        times_to_repeat (int): Number of times to append.
+
+    Returns: None
     """
     for _ in range(times_to_repeat):
         if isinstance(add_this, list):
@@ -118,6 +160,12 @@ def tack_on_end(input_list: list,
 def wondrous_count(num: int):
     """
     Give the number of steps needed to reach 1 using Collatz Conjecture.
+
+    Parameters:
+        num (int): The starting number.
+
+    Returns:
+        int: The number of steps to reach 1 using Collatz Conjecture.
     """
     steps = 0
     while num > 1:
@@ -131,6 +179,12 @@ def wondrous_count(num: int):
 def unique_vals(input_dict: dict):
     """
     Return a list of the unique values in input_dict.
+
+    Parameters:
+        input_dict (dict): Input dictionary.
+
+    Returns:
+        list: unique values in input_dict
     """
     return list(set(input_dict.values()))
 
