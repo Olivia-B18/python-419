@@ -27,9 +27,9 @@ These instructions walk you through manually making any necessary directories an
 ```
 mkdir spotifysongs/raw_data
 
-mkdir spotifysongs/data
+# MANUAL: move the downloaded CSV's into spotifysongs/raw_data
 
-pip install ./spotifysongs
+pip install -e ./spotifysongs
 
 python -m spotifysongs.pull_all
 ```
