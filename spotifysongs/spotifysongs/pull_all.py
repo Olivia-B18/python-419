@@ -13,7 +13,6 @@ raw_data/*
 """
 
 from pathlib import Path
-import os
 import pandas as pd
 import numpy as np
 
@@ -21,64 +20,142 @@ import numpy as np
 # CONSTANTS
 #####################################
 
-# These schemas help with checking and casting columns
-# to correct data types. Refer to check_and_cast_cols().
+# This schema helps with checking and casting columns
+# to correct data types. Refer to sanitize_cols().
+# 
+# NOTE: since whitespace and quotes are normalized
+# during sanitization, sentinels can be matched exactly.
 
-COMMON_SCHEMA = {
-        "string": [
-            pd.api.types.is_string_dtype,
-            "string",
-            ["track_id", "artists", "song"],
-            ],
-        "category": [
-            lambda s: isinstance(s.dtype, pd.CategoricalDtype),
-            "category",
-            ["time_signature", "mode", "key"],
-            ],
-        "float": [
-            pd.api.types.is_float_dtype,
-            "float",
-            ["loudness", "speechiness", "acousticness",
-             "instrumentalness", "liveness", "valence",
-             "tempo", "duration_ms", "danceability",
-             "energy",
-             ],
-            ],
-        "int": [
-            lambda s: s.dtype == np.int64,
-            "int",
-            ["popularity"],
-            ],
+SCHEMA = {
+    "string": {
+        "check_fxn": pd.api.types.is_string_dtype,
+        "cast_type": "string",
+        "target_cols": [
+            "track_id",
+            "artists",
+            "song",
+            "album"
+        ],
+        "sentinels": [
+            "",
+            " ",
+            "None",
+            "none",
+            "null",
+            "NULL",
+            "N/A",
+            "n/a",
+            "NA",
+            "UNKNOWN",
+            "unknown"
+        ],
+    },
+    "category": {
+        "check_fxn": lambda s: isinstance(s.dtype, pd.CategoricalDtype),
+        "cast_type": "category",
+        "target_cols": [
+            "time_signature",
+            "mode",
+            "key",
+            "genre"
+        ],
+        "sentinels": [
+            "",
+            "None",
+            "null",
+            "UNKNOWN",
+            "N/A",
+            "Unassigned"
+        ],
+    },
+    "float": {
+        "check_fxn": pd.api.types.is_float_dtype,
+        "cast_type": "float64",
+        "target_cols": [
+            "loudness",
+            "speechiness",
+            "acousticness",
+            "instrumentalness",
+            "liveness",
+            "valence",
+            "tempo",
+            "duration_ms",
+            "danceability",
+            "energy",
+        ],
+        "sentinels": [
+            -1.0,
+            -999.0,
+            -9999.0,
+            999.0,
+            9999.0
+        ],
+    },
+    "int": {
+        "check_fxn": pd.api.types.is_integer_dtype,
+        "cast_type": "Int64",
+        "target_cols": [
+            "popularity",
+            "year"
+        ],
+        "sentinels": [
+            -1,
+            -999,
+            -9999,
+            999,
+            9999
+        ],
+    },
+    "bool": {
+        "check_fxn": pd.api.types.is_bool_dtype,
+        "cast_type": "boolean",
+        # astype(bool) is truthiness-based, so it would turn the
+        # string "False" into True. Map known spellings instead and
+        # let anything unrecognized become NA so the row is dropped.
+        "cast_fxn": lambda s: to_bool(s),
+        "target_cols": ["explicit"],
+        "sentinels": [
+            "",
+            "None",
+            "null",
+            "UNKNOWN",
+            "N/A",
+            -1
+        ],
+    },
+}
+
+# Required columns both raw DataFrames should have
+REQ_COMMON_COLS= {
+        "track_id",
+        "artists",
+        "song",
+        "popularity",
+        "duration_ms",
+        "danceability",
+        "energy",
+        "key",
+        "loudness",
+        "mode",
+        "speechiness",
+        "acousticness",
+        "instrumentalness",
+        "liveness",
+        "valence",
+        "tempo",
+        "time_signature",
         }
 
-DF1_SCHEMA = {
-        "string": [
-            pd.api.types.is_string_dtype,
-            "string",
-            ["album"],
-            ],
-        "category": [
-            lambda s: isinstance(s.dtype, pd.CategoricalDtype),
-            "category",
-            ["genre"],
-            ],
-        "bool": [
-             pd.api.types.is_bool_dtype,
-             "bool",
-            ["explicit"],
-            ],
-        }
-
-DF2_SCHEMA = {
-        "int": [
-            lambda s: s.dtype == np.int64,
-            "int",
-            ["year"],
-            ],
-        }
+# Map to set invalid values to bools in a column
+BOOL_MAP = {
+    True: True, "True": True, "true": True, "TRUE": True,
+    "T": True, "t": True, "1": True, 1: True,
+    False: False, "False": False, "false": False, "FALSE": False,
+    "F": False, "f": False, "0": False, 0: False,
+}
 
 #####################################
-# FUNCITONS 
+# FUNCTIONS
 #####################################
 
 def dir_exists(input_dir: Path):
@@ -88,34 +165,88 @@ def dir_exists(input_dir: Path):
     Parameters:
         input_dir (Path): Input directory.
 
-    Returns:
-        FileNotFoundError if directory does not exist.
+    Raises:
+        FileNotFoundError: If the directory does not exist.
     """
     if not input_dir.exists() or not input_dir.is_dir():
         raise FileNotFoundError(f"Directory does not exist: {input_dir}")
 
-def check_and_cast_cols(input_df: pd.DataFrame, schema: dict) -> pd.DataFrame:
+def to_bool(input_series: pd.Series) -> pd.Series:
+    """
+    Converts a Series to nullable boolean via explicit mapping.
+
+    Parameters:
+        input_series (pd.Series): Input Series.
+
+    Returns:
+        pd.Series: 'boolean' dtype Series. Values not recognized
+        as a spelling of True/False become pd.NA so that the row
+        may be dropped later.
+    """
+    return input_series.map(BOOL_MAP).astype("boolean")
+
+def sanitize_cols(input_df: pd.DataFrame, input_schema: dict) -> pd.DataFrame:
     """
     Checks data types of columns in a DataFrame and casts if necessary.
+    
+    Also replaces any blank/missing values with NaN
+    according to sentinel flags so that the row may
+    be dropped later.
 
     Parameters:
         input_df (pd.DataFrame): Input DataFrame.
-        schema (dict): Maps a data type to...
-                        # [0] function for type checking
-                        # [1] cast type
-                        # [2] list of column names to
-    
+        input_schema (dict): Maps a target data type to a dictionary
+
     Returns:
         pd.DataFrame: original DataFrame but with properly typed columns.
     """
 
-    # Loop through each data type according to the schema
-    for key, (check_fxn, cast_type, cols_to_check) in schema.items():
+    # Loop through each data type according to the input_schema
+    for key, value in input_schema.items():
+        check_fxn = value["check_fxn"]
+        cast_type = value["cast_type"]
+        cast_fxn = value.get("cast_fxn")
+        target_cols = value["target_cols"]
+        sentinels = value["sentinels"]
+
         # Loop through each column that should be that data type
-        for col in cols_to_check:
+        for col in target_cols:
+
+            # Since schema is universal, not all target cols apply
+            # to the input_df
+            if col not in input_df.columns:
+                continue
+
+            # Exception to schema: loudness may be -1
+            if col == "loudness":
+                active_sentinels = [s for s in sentinels if s != -1]
+            else:
+                active_sentinels = sentinels
+
+            # Normalize text before matching sentinels, otherwise a
+            # padded blank ("  None  ") survives the replace and is
+            # then stripped down to an empty string, which dropna()
+            # cannot catch.
+            if cast_type == "string":
+                input_df[col] = (
+                    input_df[col]
+                    .astype("string")
+                    .str.replace('"', "", regex=False)
+                    .str.replace('[“”]', "", regex=True)
+                    .str.replace(r"\s+", " ", regex=True)
+                    .str.strip()
+                )
+
+            # Replace sentinels (blank/missing values) with NaN
+            if active_sentinels:
+                input_df[col] = input_df[col].replace(active_sentinels, np.nan)
+
             # Cast column if necessary
             if not check_fxn(input_df[col]):
-                input_df[col] = input_df[col].astype(cast_type)
+                if cast_fxn is not None:
+                    input_df[col] = cast_fxn(input_df[col])
+                else:
+                    input_df[col] = input_df[col].astype(cast_type)
                 assert check_fxn(input_df[col]), f"Failed to cast column '{col}' to type '{cast_type}'."
 
     # Return
@@ -130,13 +261,13 @@ RAW_DATA_DIR = Path(__file__).resolve().parent.parent / "raw_data"
 dir_exists(input_dir=RAW_DATA_DIR)
 
 # Validate presence of 2 CSV's in raw data directory
-csv_files = list(RAW_DATA_DIR.glob("*.csv", case_sensitive=False))
+csv_files = sorted(RAW_DATA_DIR.glob("*.csv", case_sensitive=False))
 if len(csv_files) != 2:
     raise ValueError(f"Expected exactly 2 CSV files in '{RAW_DATA_DIR}', but found {len(csv_files)}.")
 
 # Load raw data
 raw_dfs = []
-for file_path in os.scandir(RAW_DATA_DIR):
+for file_path in csv_files:
     raw_df = pd.read_csv(file_path)
     raw_dfs.append(raw_df)
 
@@ -185,33 +316,18 @@ df1 = df1.rename(columns=col_names_map)
 df2 = df2.rename(columns=col_names_map)
 
 # Check that required columns exist in df1 and df2
-req_cols = {
-        "track_id", "artists", "song",
-        "popularity", "duration_ms", "danceability",
-        "energy", "key", "loudness",
-        "mode", "speechiness", "acousticness",
-        "instrumentalness", "liveness", "valence",
-        "tempo", "time_signature",
-        }
-
-missing_req_cols = req_cols - set(df1.columns)
+missing_req_cols = REQ_COMMON_COLS- set(df1.columns)
 assert len(missing_req_cols) == 0, f"The first data set is missing required columns, which are: {missing_req_cols}"
-missing_req_cols = req_cols - set(df2.columns)
+missing_req_cols = REQ_COMMON_COLS - set(df2.columns)
 assert len(missing_req_cols) == 0, f"The second data set is missing required columns, which are: {missing_req_cols}"
 
 # Check the data type of columns in df1 and df2
-df1 = check_and_cast_cols(input_df=df1, schema=COMMON_SCHEMA)
-df1 = check_and_cast_cols(input_df=df1, schema=DF1_SCHEMA)
-df2 = check_and_cast_cols(input_df=df2, schema=COMMON_SCHEMA)
-df2 = check_and_cast_cols(input_df=df2, schema=DF2_SCHEMA)
+df1 = sanitize_cols(input_df=df1, input_schema=SCHEMA)
+df2 = sanitize_cols(input_df=df2, input_schema=SCHEMA)
 
 #####################################
-# CLEAN THE DATA
+# MERGE DATA AND CLEAN MORE
 #####################################
-
-print("LENGTHS OF DFS")
-print(len(merged_df))
-print()
 
 # Merge 'year' from df2 into df1, only keeping common songs
 merged_df= pd.merge(df1,
@@ -220,47 +336,18 @@ merged_df= pd.merge(df1,
                     how="inner",
                     )
 
-# Clean up extra whitespace and double quotes
-for col in merged_df[["song", "album", "artists"]]:
-    merged_df[col] = merged_df[col].str.replace('"', "", regex=False)
-    merged_df[col] = merged_df[col].str.replace('[“”]', "", regex=True)
-    merged_df[col] = merged_df[col].str.replace(r'\s+', ' ', regex=True).str.strip()
+# NOTE: whitespace and quotes are normalized in sanitize_cols(),
+# before sentinels are matched, so no text cleanup is needed here.
 
-# Drop rows with blank/missing values
-# 1. Replace value with NaN
-# 2. Drop NaN
-
-# Set lists of data types and columns
-#BLANKS = {
-#        "string": [
-#            ["Unknown", "UNKOWN", "null", "None", "none", ""],
-#            ["track_id", "artists", "album", "song"]
-#            ],
-#        "float": [
-#            [
-#                "energy", "speechiness", "acousticness",
-#                "instrumentalness", "liveness", "valence",
-#                "tempo", "duration_ms", "danceability",
-#                ], # loudness can be negative
-#            [-1]
-#            ],
-#bool_cols = ["explicit"]
-#category_cols = ["time_signature", "mode", "key"] # genre is separate
-#float_cols = int_cols = ["popularity", "year"]
-#
-#replace_bladdnk_values(input_df=merged_df,
-#                     cols_to_check=
-#
-#df[string_cols] = df[string_cols].replace(string_sentinels, np.nan)
-#df[numeric_cols] = df[numeric_cols].replace(numeric_sentinels, np.nan)
-
-print("VALUE COUNTS")
-for col in merged_df.columns:
-    print(merged_df[col].value_counts())
-print()
+# Drop rows with NaN
+merged_df = merged_df.dropna()
+assert merged_df.isna().sum().sum() == 0, "Failed to resolve NaN values!"
 
 # Separate 'genre' into a separate DataFrame
+# Genre was stored per-row, so the same (track_id, genre)
+# pair can appear more than once.
 genres_df = merged_df[["track_id", "genre"]].copy()
+genres_df = genres_df.drop_duplicates()
 del merged_df["genre"]
 
 # Only keep rows with unique 'track_id'. Note...
@@ -277,12 +364,6 @@ merged_df = merged_df.drop_duplicates(subset=["track_id"], keep="first")
 merged_df = merged_df.reset_index(drop=True)
 genres_df = genres_df.reset_index(drop=True)
 
-print("NEW LENGTHS OF DFS")
-print(len(merged_df))
-print(len(set(genres_df["track_id"])))
-print(len(genres_df))
-print()
-
 # Numeric values seem to be within a proper range
 # print("OUTLIER CHECK")
 # print(merged_df.describe().T[["min", "max"]])
@@ -295,9 +376,9 @@ print()
 # Create and validate save directory
 SAVE_DIR= Path(__file__).resolve().parent.parent / "data"
 dir_exists(input_dir=SAVE_DIR)
-SAVE_SONGS = SAVE_DIR / "spotify_songs.csv"
-SAVE_GENRES = SAVE_DIR / "spotify_genres.csv"
+SAVE_SONGS = SAVE_DIR / "spotify_songs.parquet"
+SAVE_GENRES = SAVE_DIR / "spotify_genres.parquet"
 
-# merged_df.to_parquet(SAVE_SONGS, compression="parquet")
-# genres_df.to_parquet(SAVE_GENRES, compression="parquet")
+merged_df.to_parquet(SAVE_SONGS, compression="gzip")
+genres_df.to_parquet(SAVE_GENRES, compression="gzip")
 
