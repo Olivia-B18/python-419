@@ -4,6 +4,7 @@ ipython==9.17.0
 ipython_pygments_lexers==1.1.1
 jedi==0.20.0
 matplotlib-inline==0.2.2
+numpy==2.5.2
 packaging==26.3
 pandas==3.0.5
 parso==0.8.7
@@ -19,6 +20,7 @@ Pygments==2.21.0
 python-dateutil==2.9.0.post0
 setuptools==84.0.0
 six==1.17.0
+spotifysongs-env==0.1.0
 stack_data==0.6.3
 traitlets==5.16.1
 typing_extensions==4.16.0
