@@ -12,14 +12,15 @@ to clean and prepare it.
 
 ## Installation
 
-1. Create and activate a virtual environment (I used conda).
+1. Create and activate a virtual environment in Python 3.12 (I used conda).
     ```
-    conda create -n spotifysongs-env
+    conda create -n spotifysongs-env python=3.12
     conda activate spotifysongs-env
     ```
-2. Follow the instructions in ```spotifysongs/README.md```
+2. Clone this repo into your desired directory using SSH.
+3. Follow the installation instructions in ```spotifysongs/README.md```
 to get the data and dependencies.
-3. Go to any ```homework``` directory and run the main script.
+4. Go to any ```homework``` directory and run the main script for that experiment.
 
 ## Tour of Directories
 

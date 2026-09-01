@@ -25,7 +25,7 @@ pip install -e ./spotifysongs
 python -m spotifysongs.pull_all
 ```
 
-## How to Use the Package: Calling Load
+## Calling the Load Function
 
 Run Python while in a homework directory, not the project root. Your Python script will call the load function in ```spotifysongs``` like so:
 
