@@ -4,9 +4,15 @@ import spotifysongs
 globals().update(spotifysongs.load())
 
 # Print the tables
-print("The length of the 'songs' DataFrame is: ", len(songs))
+print("The 'songs' DataFrame:")
+print("Number of songs: ", len(songs))
+print("Columns: ", songs.columns) 
 print(songs.head())
 print()
-print("The lenght of the 'genres' DataFrame is: ", len(genres))
+
+print("The 'genres' DataFrame:")
+print("Number of song-genre pairs: ", len(genres))
+print("Columns: ", genres.columns)
 print(genres.head())
+print()
 
