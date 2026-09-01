@@ -12,8 +12,11 @@ to clean and prepare it.
 
 ## Installation
 
-1. Create a virtual environment with Python 3.12 (I used conda).
-    1. ```conda create -n spotifysongs-env python=3.12```
+1. Create and activate a virtual environment (I used conda).
+    ```
+    conda create -n spotifysongs-env
+    conda activate spotifysongs-env
+    ```
 2. Follow the instructions in ```spotifysongs/README.md```
 to get the data and dependencies.
 3. Go to any ```homework``` directory and run the main script.

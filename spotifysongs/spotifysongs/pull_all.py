@@ -258,7 +258,6 @@ def sanitize_cols(input_df: pd.DataFrame, input_schema: dict) -> pd.DataFrame:
 
 # Validate raw data directory path 
 RAW_DATA_DIR = Path(__file__).resolve().parent.parent / "raw_data"
-RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 dir_exists(input_dir=RAW_DATA_DIR)
 
 # Validate presence of 2 CSV's in raw data directory

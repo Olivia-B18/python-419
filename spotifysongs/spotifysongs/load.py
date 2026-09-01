@@ -43,7 +43,8 @@ def load() -> dict:
     CURRENT_DIR = Path(__file__).resolve().parent
     PROJECT_ROOT = CURRENT_DIR.parent
     DATA_DIR = PROJECT_ROOT / "data"
-    os.path.exists(DATA_DIR)
+    if not os.path.exists(DATA_DIR):
+        raise FileNotFoundError(f"No data/ directory. Run pull_all.py first: {DATA_DIR}")
 
     # Load data
     songs_df = pd.read_parquet(DATA_DIR / "spotify_songs.parquet")

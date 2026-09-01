@@ -1,12 +1,3 @@
-the original data source;
-the source URL, API, or acquisition procedure;
-any account or credential requirements, without including secrets;
-what each generated table represents;
-how to install the package;
-how to run pull_all.py;
-how to call load();
-any known limitations or manual steps.
-
 # The Package ```spotifysongs```
 
 ## About
@@ -22,21 +13,29 @@ I made a free account with Kaggle and downloaded two CSV's of Spotify songs from
 
 ## Installation
 
-These instructions walk you through manually making any necessary directories and installing dependencies. From the project root, run the following commands:
+These instructions walk you through manually making any necessary directories and installing dependencies. From the project root, run the following commands in your terminal:
 
 ```
-mkdir spotifysongs/raw_data
+mkdir -p spotifysongs/raw_data
 
-# MANUAL: move the downloaded CSV's into spotifysongs/raw_data
+# MANUAL: unzip and move the downloaded CSV's into spotifysongs/raw_data
 
 pip install -e ./spotifysongs
 
 python -m spotifysongs.pull_all
 ```
 
-## Loading the Data
+## How to Use the Package: Calling Load
 
-Run the test script in ```homework0```. This executes the package's load function to load parquet files. You should see the ```songs``` and ```genres``` DataFrames print successfully.
+Run Python while in a homework directory, not the project root. Your Python script will call the load function in ```spotifysongs``` like so:
+
+```
+import spotifysongs
+
+tables = spotifysongs.load()
+```
+
+For example, go to ```homework0``` and run the ```test_load.py``` script. This executes the package's load function to load parquet files. You should see the ```songs``` and ```genres``` DataFrames print successfully.
 
 ```
 cd homework0
