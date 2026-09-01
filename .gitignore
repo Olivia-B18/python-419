@@ -15,5 +15,8 @@ dist/
 # Generated data
 spotifysongs/data/*
 
+# Raw data
+spotifysongs/raw_data/*
+
 # SWP files
 *.swp
