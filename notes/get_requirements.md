@@ -1,7 +1,7 @@
 # How to Get Requirements for a Project
 
-Install proper packages:
-```pip install -r requirements.txt```
+You must manually track which packages are needed.
+This command only helps you get the version of each
+listed package.
 
-Generate the requirements file from the current env:
-```pip list --format=freeze > requirements.txt```
+```pip list --format=freeze | grep -E '^(ipython|numpy|pandas|pyarrow)=='```

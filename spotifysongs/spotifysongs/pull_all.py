@@ -258,6 +258,7 @@ def sanitize_cols(input_df: pd.DataFrame, input_schema: dict) -> pd.DataFrame:
 
 # Validate raw data directory path 
 RAW_DATA_DIR = Path(__file__).resolve().parent.parent / "raw_data"
+RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 dir_exists(input_dir=RAW_DATA_DIR)
 
 # Validate presence of 2 CSV's in raw data directory
@@ -375,6 +376,7 @@ genres_df = genres_df.reset_index(drop=True)
 
 # Create and validate save directory
 SAVE_DIR= Path(__file__).resolve().parent.parent / "data"
+SAVE_DIR.mkdir(parents=True, exist_ok=True)
 dir_exists(input_dir=SAVE_DIR)
 SAVE_SONGS = SAVE_DIR / "spotify_songs.parquet"
 SAVE_GENRES = SAVE_DIR / "spotify_genres.parquet"

@@ -3,13 +3,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spotifysongs-env"
+name = "spotifysongs"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "pandas",
-    "pyarrow",
-    "numpy",
+    "ipython==9.17.0",
+    "pandas==3.0.5",
+    "pyarrow==25.0.0",
+    "numpy==2.5.2",
 ]
 
 [tool.setuptools]
