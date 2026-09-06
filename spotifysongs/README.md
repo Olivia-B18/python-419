@@ -45,4 +45,4 @@ python test_load.py
 ## Overview of Generated DataFrames
 
 * ```songs```: the is the main data set containing about 36,000 unique track id's and info on each song, including artists, album, popularity, and audio features.
-* ```genres```: this is a related data set containing about 45,000 track id / genre pairs. The same song will appear more than once if it falls under more than one genre.
+* ```genres```: this is a related data set containing about 45,000 track id / genre pairs. The same song will appear in multiple rows if it falls under more than one genre.
