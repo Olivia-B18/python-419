@@ -30,3 +30,8 @@ sets as well as the ```spotifysongs``` package.
 my data set.
 * ```python-practice```: assignment I was given to brush up on Python.
 * ```notes```: my personal notes as markdown files.
+
+## AI Usage
+
+This project was developed in tandem with Claude Code (Opus 5) and Gemini Flash 3.6. AI was used for API queries, debugging, co-writing code, and more.
+
