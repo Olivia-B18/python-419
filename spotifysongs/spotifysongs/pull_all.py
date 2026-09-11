@@ -15,6 +15,14 @@ raw_data/*
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import OneHotEncoder
+
+#####################################
+# SET PANDAS DISPLAY OPTIONS
+#####################################
+
+pd.set_option("display.max.columns",80)
+pd.set_option("display.width",240)
 
 #####################################
 # CONSTANTS
@@ -227,6 +235,7 @@ def sanitize_cols(input_df: pd.DataFrame, input_schema: dict) -> pd.DataFrame:
             # padded blank ("  None  ") survives the replace and is
             # then stripped down to an empty string, which dropna()
             # cannot catch.
+
             if cast_type == "string":
                 input_df[col] = (
                     input_df[col]
@@ -321,53 +330,96 @@ assert len(missing_req_cols) == 0, f"The first data set is missing required colu
 missing_req_cols = REQ_COMMON_COLS - set(df2.columns)
 assert len(missing_req_cols) == 0, f"The second data set is missing required columns, which are: {missing_req_cols}"
 
-# Check the data type of columns in df1 and df2
+# Clean df1 and df2 before merging:
+# - check column data types (cast if necessary)
+# - change blank/missing values to NaN to drop later
 df1 = sanitize_cols(input_df=df1, input_schema=SCHEMA)
 df2 = sanitize_cols(input_df=df2, input_schema=SCHEMA)
 
 #####################################
-# MERGE DATA AND CLEAN MORE
+# SEPARATE GENRES FROM DF1
 #####################################
 
-# Merge 'year' from df2 into df1, only keeping common songs
-merged_df= pd.merge(df1,
-                    df2[["track_id", "year"]],
-                    on="track_id",
-                    how="inner",
-                    )
+# Separate "genre" from df1 to one-hot encode later
+genre_pairs = df1[["track_id", "genre"]].copy()
+genre_pairs = genre_pairs.dropna().drop_duplicates()
+df1 = df1.drop(columns=["genre"])
 
-# NOTE: whitespace and quotes are normalized in sanitize_cols(),
-# before sentinels are matched, so no text cleanup is needed here.
+#####################################
+# DROP NA AND DE-DUPLICATE
+#####################################
 
-# Drop rows with NaN
+# Remove missing values before merge
+df1 = df1.dropna()
+
+# Only keep the track_id with the highest popularity
+df1 = df1.sort_values(by="popularity", ascending=False)
+df1 = df1.drop_duplicates(subset=["track_id"], keep="first")
+assert df1["track_id"].is_unique, "df1 still holds duplicate track_id's!"
+
+#####################################
+# MERGE DATA
+#####################################
+
+# Extract "year" from df2
+df2_year = df2[["track_id", "year"]]
+df2_year = df2_year.dropna()
+df2_year = df2_year.drop_duplicates(subset=["track_id"], keep="first")
+
+# Merge df1 and df2 on an inner join for only common track_id's
+merged_df = pd.merge(df1,
+                     df2_year,
+                     on="track_id",
+                     how="inner",
+                     )
 merged_df = merged_df.dropna()
 assert merged_df.isna().sum().sum() == 0, "Failed to resolve NaN values!"
+assert merged_df["track_id"].is_unique, "merged_df holds duplicate track_id's!"
 
-# Separate 'genre' into a separate DataFrame
-# Genre was stored per-row, so the same (track_id, genre)
-# pair can appear more than once.
-genres_df = merged_df[["track_id", "genre"]].copy()
-genres_df = genres_df.drop_duplicates()
-del merged_df["genre"]
-
-# Only keep rows with unique 'track_id'. Note...
-# - Since popularity differs in duplicate rows,
-#   keep the row with the highest popularity
-# - There were duplicate rows to begin with b/c
-#   the genre was stored on a per-row basis.
-
-# Only keep rows with unique 'track_id' where popularity is highest
-merged_df = merged_df.sort_values(by="popularity", ascending=False)
-merged_df = merged_df.drop_duplicates(subset=["track_id"], keep="first")
-
-# Reset indices
+# Reset the index
 merged_df = merged_df.reset_index(drop=True)
-genres_df = genres_df.reset_index(drop=True)
 
-# Numeric values seem to be within a proper range
-# print("OUTLIER CHECK")
-# print(merged_df.describe().T[["min", "max"]])
-# print()
+#####################################
+# MULTI-LABEL ENCODE GENRES
+#####################################
+
+# Restrict (track_id, genre) pairs to songs that survived the inner join
+genre_pairs = genre_pairs[genre_pairs["track_id"].isin(merged_df["track_id"])]
+
+# ONE-HOT ENCODING VS MULTI-LABEL PROBLEM?
+# One-hot encoding means there is a single 1 in a row of
+# otherwise 0's, but I can't one-hot encode genres directly
+# because I want to see a mix of 1's and 0's in a single
+# row (song) for each genre it falls under. This is a
+# multi-label problem.
+
+# Create a pair_matrix where each row represents a single
+# (track_id, genre) pair using a sequence of 0's and a single 1
+encoder = OneHotEncoder(sparse_output=False, dtype=np.int8)
+pair_matrix = encoder.fit_transform(genre_pairs[["genre"]])
+
+# Extract all the genres available and prefix with "genre_"
+genre_cols = encoder.get_feature_names_out(["genre"])
+
+# Shove pair_matrix into a DataFrame using track_id as index
+genres_df = pd.DataFrame(pair_matrix,
+                          columns=genre_cols,
+                          index=genre_pairs["track_id"],
+                          )
+
+# Group by track_id's and take max for each genre col
+genres_df = genres_df.groupby(level=0).max()
+
+# Undo alphabetical order of groupby() using reindex()
+genres_df = genres_df.reindex(merged_df["track_id"], fill_value=0)
+
+# Overwrite the index for cleaner concatenation
+genres_df.index = merged_df.index
+
+# Add genres_df to merged_df
+merged_df = pd.concat([merged_df, genres_df], axis=1)
+
+assert len(merged_df) == len(genres_df), "Genre block lost or gained rows!"
 
 #####################################
 # SAVE TO PARQUET FILES
@@ -377,9 +429,10 @@ genres_df = genres_df.reset_index(drop=True)
 SAVE_DIR= Path(__file__).resolve().parent.parent / "data"
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 dir_exists(input_dir=SAVE_DIR)
-SAVE_SONGS = SAVE_DIR / "spotify_songs.parquet"
-SAVE_GENRES = SAVE_DIR / "spotify_genres.parquet"
 
+# Create parquet file path(s)
+SAVE_SONGS = SAVE_DIR / "spotify_songs.parquet"
+
+# Save to parquet files path(s)
 merged_df.to_parquet(SAVE_SONGS, compression="gzip")
-genres_df.to_parquet(SAVE_GENRES, compression="gzip")
 

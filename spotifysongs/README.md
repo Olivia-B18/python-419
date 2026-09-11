@@ -35,14 +35,18 @@ import spotifysongs
 tables = spotifysongs.load()
 ```
 
-For example, go to ```homework0``` and run the ```test_load.py``` script. This executes the package's load function to load parquet files. You should see the ```songs``` and ```genres``` DataFrames print successfully.
+For example, go to ```homework0``` and run the ```test_load.py``` script. This executes the package's load function to load parquet files. You should see the ```songs``` DataFrame print successfully.
 
 ```
 cd homework0
 python test_load.py
 ```
 
-## Overview of Generated DataFrames
+## Overview of Generated ```songs``` DataFrame
 
-* ```songs```: the is the main data set containing about 36,000 unique track id's and info on each song, including artists, album, popularity, and audio features.
-* ```genres```: this is a related data set containing about 45,000 track id / genre pairs. The same song will appear in multiple rows if it falls under more than one genre.
+```songs``` the main and only data set, containing about 36,000 unique track id's and info on each song, including artists, album, popularity, and audio features. There are two kinds of columns in this data set:
+
+1. **Genres.** Genres are one-hot encoded directly into ```songs``` as 113 columns named ```genre_<name>``` (i.e. ```genre_edm```, ```genre_pop```, ...). A song may belong to more than one genre, so more than one of those columns may be 1 for a given row.
+
+2. **Song Info.** Song info contains all other info on a track. It comes from the first data set (```kaggle_114k_songs.csv```). The second data set contributes only ```year```; where the two disagree on a column such as popularity or acousticness, the first data set wins.
+

@@ -17,7 +17,7 @@ to clean and prepare it.
     conda create -n spotifysongs-env python=3.12
     conda activate spotifysongs-env
     ```
-2. Clone this repo into your desired directory using SSH.
+2. Clone this repo into your desired directory.
 3. Follow the installation instructions in ```spotifysongs/README.md```
 to get the data and dependencies.
 4. Go to any ```homework``` directory and run the main script for that experiment.

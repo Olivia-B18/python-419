@@ -17,11 +17,11 @@ import pandas as pd
 # Parquet files only save category types correctly for
 # string-looking values, not integer-looking ones.
 # Must re-cast.
+
 CATEGORY_COLS = [
     "key",
     "mode",
     "time_signature",
-    "genre",
 ]
 
 #############################################
@@ -48,17 +48,14 @@ def load() -> dict:
 
     # Load data
     songs_df = pd.read_parquet(DATA_DIR / "spotify_songs.parquet")
-    genres_df = pd.read_parquet(DATA_DIR / "spotify_genres.parquet")
 
     # Restore categorical dtypes lost in the parquet round-trip
-    for df in (songs_df, genres_df):
-        for col in CATEGORY_COLS:
-            if col in df.columns:
-                df[col] = df[col].astype("category")
+    for col in CATEGORY_COLS:
+        if col in songs_df.columns:
+            songs_df[col] = songs_df[col].astype("category")
 
     # Return
     return {
         "songs": songs_df,
-        "genres": genres_df,
     }
 
