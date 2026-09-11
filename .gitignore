@@ -20,3 +20,6 @@ spotifysongs/raw_data/*
 
 # SWP files
 *.swp
+
+# Class repo
+data419/
