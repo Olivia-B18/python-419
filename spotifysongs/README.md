@@ -33,6 +33,9 @@ Run Python while in a homework directory, not the project root. Your Python scri
 import spotifysongs
 
 tables = spotifysongs.load()
+
+# Alternatively: use globals().update(spotifysongs.load())
+# and get var "songs" directly
 ```
 
 For example, go to ```homework0``` and run the ```test_load.py``` script. This executes the package's load function to load parquet files. You should see the ```songs``` DataFrame print successfully.
