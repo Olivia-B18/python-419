@@ -42,7 +42,8 @@ SCHEMA = {
             "track_id",
             "artists",
             "song",
-            "album"
+            "album",
+            "genre",
         ],
         "sentinels": [
             "",
@@ -56,24 +57,6 @@ SCHEMA = {
             "NA",
             "UNKNOWN",
             "unknown"
-        ],
-    },
-    "category": {
-        "check_fxn": lambda s: isinstance(s.dtype, pd.CategoricalDtype),
-        "cast_type": "category",
-        "target_cols": [
-            "time_signature",
-            "mode",
-            "key",
-            "genre"
-        ],
-        "sentinels": [
-            "",
-            "None",
-            "null",
-            "UNKNOWN",
-            "N/A",
-            "Unassigned"
         ],
     },
     "float": {
@@ -104,7 +87,10 @@ SCHEMA = {
         "cast_type": "Int64",
         "target_cols": [
             "popularity",
-            "year"
+            "year",
+            "time_signature",
+            "mode",
+            "key",
         ],
         "sentinels": [
             -1,
@@ -231,6 +217,15 @@ def sanitize_cols(input_df: pd.DataFrame, input_schema: dict) -> pd.DataFrame:
             else:
                 active_sentinels = sentinels
 
+            # Exception to schema: time_signature is only valid for 3-7
+            if col == "time_signature":
+                invalid_time_sig_vals = list(
+                        key
+                        for key in input_df["time_signature"].value_counts().keys()
+                        if key not in range(3, 8)
+                        )
+                input_df["time_signature"] = input_df["time_signature"].replace(invalid_time_sig_vals, np.nan)
+
             # Normalize text before matching sentinels, otherwise a
             # padded blank ("  None  ") survives the replace and is
             # then stripped down to an empty string, which dropna()
@@ -340,7 +335,10 @@ df2 = sanitize_cols(input_df=df2, input_schema=SCHEMA)
 # SEPARATE GENRES FROM DF1
 #####################################
 
-# Separate "genre" from df1 to one-hot encode later
+# Note: the "genre" column will later be
+# many-encoded. We must detach it from the
+# main df to maintain index order later.
+
 genre_pairs = df1[["track_id", "genre"]].copy()
 genre_pairs = genre_pairs.dropna().drop_duplicates()
 df1 = df1.drop(columns=["genre"])
@@ -372,7 +370,15 @@ merged_df = pd.merge(df1,
                      on="track_id",
                      how="inner",
                      )
+
+# Drop NaN from sanitization
 merged_df = merged_df.dropna()
+
+# Convert Int64 (nullable type) back to int64
+for col in SCHEMA["int"]["target_cols"]:
+    merged_df[col] = merged_df[col].astype(int)
+
+# Asserts
 assert merged_df.isna().sum().sum() == 0, "Failed to resolve NaN values!"
 assert merged_df["track_id"].is_unique, "merged_df holds duplicate track_id's!"
 
@@ -390,7 +396,7 @@ genre_pairs = genre_pairs[genre_pairs["track_id"].isin(merged_df["track_id"])]
 # One-hot encoding means there is a single 1 in a row of
 # otherwise 0's, but I can't one-hot encode genres directly
 # because I want to see a mix of 1's and 0's in a single
-# row (song) for each genre it falls under. This is a
+# row for each genre a song falls under. This is a
 # multi-label problem.
 
 # Create a pair_matrix where each row represents a single
@@ -420,6 +426,68 @@ genres_df.index = merged_df.index
 merged_df = pd.concat([merged_df, genres_df], axis=1)
 
 assert len(merged_df) == len(genres_df), "Genre block lost or gained rows!"
+
+#####################################
+# ONE-HOT ENCODE TIME_SIGNATURE
+#####################################
+
+# Get "time_signature" column
+time_sigs = merged_df[["time_signature"]]
+
+# Valid time signatures are [3, 7] 
+encoder = OneHotEncoder(categories=[[3, 4, 5, 6, 7]],
+                        sparse_output=False,
+                        dtype=np.int8,
+                        )
+time_sig_matrix = encoder.fit_transform(time_sigs)
+
+# Extract all the time_signatures available and prefix with "time_signature_"
+time_sig_cols = encoder.get_feature_names_out(["time_signature"])
+
+# Rows line up one-to-one with merged_df, so reuse its index
+time_sigs_df = pd.DataFrame(time_sig_matrix,
+                           columns=time_sig_cols,
+                           index=merged_df.index,
+                           )
+
+# Add the one-hot encoded time signature columns
+merged_df = pd.concat([merged_df, time_sigs_df], axis=1)
+
+# Drop the original "time_signature"
+merged_df = merged_df.drop(columns=["time_signature"])
+
+assert (time_sigs_df.sum(axis=1) == 1).all(), "Each song should have exactly one time signature!"
+
+#####################################
+# ONE-HOT ENCODE KEY
+#####################################
+
+# Get "key" column
+keys = merged_df[["key"]]
+
+# Valid time signatures are [0, 11] 
+encoder = OneHotEncoder(categories=[[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]],
+                        sparse_output=False,
+                        dtype=np.int8,
+                        )
+keys_matrix = encoder.fit_transform(keys)
+
+# Extract all the keys available and prefix with "key_"
+key_cols = encoder.get_feature_names_out(["key"])
+
+# Rows line up one-to-one with merged_df, so reuse its index
+keys_df = pd.DataFrame(keys_matrix,
+                       columns=key_cols,
+                       index=merged_df.index,
+                       )
+
+# Add the one-hot encoded keys columns
+merged_df = pd.concat([merged_df, keys_df], axis=1)
+
+# Drop the original "time_signature"
+merged_df = merged_df.drop(columns=["key"])
+
+assert (keys_df.sum(axis=1) == 1).all(), "Each song should have exactly one key!"
 
 #####################################
 # SAVE TO PARQUET FILES

@@ -9,20 +9,6 @@ from pathlib import Path
 import os
 import pandas as pd
 
-############################################
-# CONSTANTS
-############################################
-
-# Columns that pull_all.py stores as 'category'.
-# Parquet files only save category types correctly for
-# string-looking values, not integer-looking ones.
-# Must re-cast.
-
-CATEGORY_COLS = [
-    "key",
-    "mode",
-    "time_signature",
-]
 
 #############################################
 # FUNCTIONS
@@ -48,11 +34,6 @@ def load() -> dict:
 
     # Load data
     songs_df = pd.read_parquet(DATA_DIR / "spotify_songs.parquet")
-
-    # Restore categorical dtypes lost in the parquet round-trip
-    for col in CATEGORY_COLS:
-        if col in songs_df.columns:
-            songs_df[col] = songs_df[col].astype("category")
 
     # Return
     return {
