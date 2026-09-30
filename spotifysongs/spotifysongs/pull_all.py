@@ -374,6 +374,10 @@ merged_df = pd.merge(df1,
 # Drop NaN from sanitization
 merged_df = merged_df.dropna()
 
+# Divide "duration_ms" by 1000 to get "duration_s" (seconds)
+merged_df["duration_ms"] = merged_df["duration_ms"] / 1000
+merged_df = merged_df.rename(columns={"duration_ms": "duration_s"})
+
 # Convert Int64 (nullable type) back to int64
 for col in SCHEMA["int"]["target_cols"]:
     merged_df[col] = merged_df[col].astype(int)
