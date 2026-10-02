@@ -22,12 +22,14 @@ np.random.seed(12345)
 TABLE = spotifysongs.load()
 SONGS = TABLE["songs"]
 TARGET = "popularity"
+CATEGORICAL_VAR_NAME = "key"
 KEY_COLS = [col for col in SONGS.columns if col.startswith("key_")]
-BASELINE_CATEGORICAL_TYPE = "key_0"
+BASELINE_CATEGORICAL_NAME = "key_0"
 x1_name = "duration_s"
 x2_name = "valence"
 FEATURES = [x1_name, x2_name]
 FEATURES.extend(KEY_COLS)
+INTERCEPT_NAME = "intercept"
 
 ########################################################
 # FUNCTIONS
@@ -116,7 +118,7 @@ X = SONGS[FEATURES]
 
 # Add intercept x0 (col of 1s) to design matrix X
 ones = np.ones((len(X), 1))
-X.insert(0, "intercept", ones)
+X.insert(0, INTERCEPT_NAME, ones)
 
 # What are the columns in X?
 # intercept, x1, x2, x3, etc. according to FEATURES
@@ -169,7 +171,7 @@ slope = m1_lr.coef_[1] / m1_scaler.scale_[0]
 # Note: average value for target and b0 should be about the same
 # print()
 # print("Check: scaled intercept should be about the same as mean in y_train")
-# print(np.allclose(lr.coef_[0], y_train.mean()))
+# print(np.allclose(m1_lr.coef_[0], y_train.mean()))
 
 # Get formula for "y = (coef * intercept) + (coef * x1)"
 print()
@@ -249,11 +251,11 @@ b2 = m1q_lr.coef_[2] / m1q_scaler.scale_[1]
 print()
 print("Formula (no scaled terms):")
 print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x1_sq})^2".format(b0=b0,
-                                                               b1=b1,
-                                                               x1=X_train_raw.columns[1],
-                                                               b2=b2,
-                                                               x1_sq=X_train_raw.columns[1],
-                                                               ))
+                                                                   b1=b1,
+                                                                   x1=X_train_raw.columns[1],
+                                                                   b2=b2,
+                                                                   x1_sq=X_train_raw.columns[1],
+                                                                   ))
 
 # My formula (takes raw values) and predict() (takes scaled values) should yield the same results
 # formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x1_test_sq[0:10])
@@ -364,12 +366,12 @@ b2 = m2_lr.coef_[2] / m2_scaler.scale_[1]
 # Get formula for "y = (coef * intercept) + (coef * x1) + (coef * x2)"
 print()
 print("Formula (no scaled terms):")
-print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x2})^2".format(b0=b0,
-                                                                b1=b1,
-                                                                x1=X_train_raw.columns[1],
-                                                                b2=b2,
-                                                                x2=X_train_raw.columns[2],
-                                                                ))
+print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*{x2}".format(b0=b0,
+                                                            b1=b1,
+                                                            x1=X_train_raw.columns[1],
+                                                            b2=b2,
+                                                            x2=X_train_raw.columns[2],
+                                                            ))
 
 # My formula (takes raw values) and predict() (takes scaled values) should yield the same results
 # formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x2_test[0:10])
@@ -377,7 +379,7 @@ print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x2})^2".format(b0=b0,
 # check_formula(formula_preds=formula_preds, lr_preds=lr_preds)
 
 # Calculate R^2 and RMSE
-eval_results = evaluate_model(lr=m1q_lr,
+eval_results = evaluate_model(lr=m2_lr,
                               X_train=X_train,
                               X_test=X_test,
                               y_train=y_train,
@@ -409,24 +411,44 @@ X_train_two_num = np.concatenate([x1_train, x2_train], axis=1)
 X_test_two_num = np.concatenate([x1_test, x2_test], axis=1)
 
 # Standardize x1 into z-scores
-m2_scaler = StandardScaler()
-m2_scaler.fit(X_train_two_num)
-X_train_scaled = m2_scaler.transform(X_train_two_num)
-X_test_scaled = m2_scaler.transform(X_test_two_num)
+m3_scaler = StandardScaler()
+m3_scaler.fit(X_train_two_num)
+X_train_scaled = m3_scaler.transform(X_train_two_num)
+X_test_scaled = m3_scaler.transform(X_test_two_num)
 
-# Combine scaled data with intercept from X_train_raw
-X_train = np.concatenate([X_train_raw.iloc[:, 0:1], X_train_scaled],
+# Extract x3 from raw train and test data (it's already one-hot encoded)
+# Be sure to skip intercept and exclude baseline categorical type
+X_train_keys = (X_train_raw.drop([BASELINE_CATEGORICAL_NAME,
+                                  x1_name,
+                                  x2_name,
+                                  INTERCEPT_NAME,
+                                  ], axis=1)).to_numpy()
+X_test_keys = (X_test_raw.drop([BASELINE_CATEGORICAL_NAME,
+                                x1_name,
+                                x2_name,
+                                INTERCEPT_NAME,
+                                ], axis=1)).to_numpy()
+
+# Combine scaled data with intercept and categorical var from X_train_raw
+X_train = np.concatenate([X_train_raw.iloc[:, 0:1],
+                          X_train_scaled,
+                          X_train_keys,
+                          ],
                          axis=1)
-X_test = np.concatenate([X_test_raw.iloc[:, 0:1], X_test_scaled],
+X_test = np.concatenate([X_test_raw.iloc[:, 0:1],
+                         X_test_scaled,
+                         X_test_keys,
+                         ],
                         axis=1)
 
 # Do linear regression
-m2_lr = LinearRegression(fit_intercept=False)
-m2_lr.fit(X_train, y_train)
+m3_lr = LinearRegression(fit_intercept=False)
+m3_lr.fit(X_train, y_train)
 
 # Convert learned coefs from z-score to raw
 # Note: indices in scaler are off-by-one compared to lr
-# because lr has intercept while scaler doesn't...
+# because lr has intercept while scaler doesn't and
+# because lr has categorical var coefs but scaler doesn't...
 # scaler.mean_[0] --> mean for x1
 # scaler.mean_[1] --> mean for x2
 # scaler.scale_[0] --> std for x1
@@ -434,34 +456,40 @@ m2_lr.fit(X_train, y_train)
 # lr.coef_[0] --> b0
 # lr.coef_[1] --> b1
 # lr.coef_[2] --> b2
-b0 = m2_lr.coef_[0] - (m2_lr.coef_[1] * m2_scaler.mean_[0] / m2_scaler.scale_[0]) -\
-                      (m2_lr.coef_[2] * m2_scaler.mean_[1] / m2_scaler.scale_[1])
-b1 = m2_lr.coef_[1] / m2_scaler.scale_[0]
-b2 = m2_lr.coef_[2] / m2_scaler.scale_[1]
+# lr.coef_[3] --> b3
+b0 = m3_lr.coef_[0] - (m3_lr.coef_[1] * m3_scaler.mean_[0] / m3_scaler.scale_[0]) -\
+                      (m3_lr.coef_[2] * m3_scaler.mean_[1] / m3_scaler.scale_[1])
+b1 = m3_lr.coef_[1] / m3_scaler.scale_[0]
+b2 = m3_lr.coef_[2] / m3_scaler.scale_[1]
+b3 = m3_lr.coef_[3] # CAT VAR WAS NOT SCALED
+b4 = m3_lr.coef_[4]
 
-# Get formula for "y = (coef * intercept) + (coef * x1) + (coef * x2)"
+# Get formula for "y = (coef * intercept) + (coef * x1) + (coef * x2) + (coef * x3)"
 print()
 print("Formula (no scaled terms):")
-print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x2})^2".format(b0=b0,
-                                                                b1=b1,
-                                                                x1=X_train_raw.columns[1],
-                                                                b2=b2,
-                                                                x2=X_train_raw.columns[2],
-                                                                ))
+print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*{x2} + \
+{b3:.3f}*{first_key} + {b4:.3f}*{second_key} + ...".format(b0=b0,
+                                                            b1=b1,
+                                                            x1=X_train_raw.columns[1],
+                                                            b2=b2,
+                                                            x2=X_train_raw.columns[2],
+                                                            b3=b3,
+                                                            first_key=X_train_raw.columns[4],
+                                                            b4=b4,
+                                                            second_key=X_train_raw.columns[5],
+                                                            ))
 
 # My formula (takes raw values) and predict() (takes scaled values) should yield the same results
-# formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x2_test[0:10])
-# lr_preds = (m2_lr.predict(X_test[0:10, :])).reshape(-1, 1)
+# key_term = (X_test_keys[0:10, :] @ m3_lr.coef_[3:]).reshape(-1, 1)
+# formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x2_test[0:10]) + key_term
+# lr_preds = (m3_lr.predict(X_test[0:10, :])).reshape(-1, 1)
 # check_formula(formula_preds=formula_preds, lr_preds=lr_preds)
 
 # Calculate R^2 and RMSE
-eval_results = evaluate_model(lr=m1q_lr,
+eval_results = evaluate_model(lr=m3_lr,
                               X_train=X_train,
                               X_test=X_test,
                               y_train=y_train,
                               y_test=y_test,
                               )
 print_model_evaluation(eval_results=eval_results)
-
-
-
