@@ -23,6 +23,7 @@ TABLE = spotifysongs.load()
 SONGS = TABLE["songs"]
 TARGET = "popularity"
 KEY_COLS = [col for col in SONGS.columns if col.startswith("key_")]
+BASELINE_CATEGORICAL_TYPE = "key_0"
 x1_name = "duration_s"
 x2_name = "valence"
 FEATURES = [x1_name, x2_name]
@@ -79,8 +80,8 @@ def evaluate_model(lr: LinearRegression,
     y_pred_test = lr.predict(X_test)
     r2_train = r2_score(y_train, y_pred_train)
     r2_test = r2_score(y_test, y_pred_test)
-    rmse_train = np.sqrt(mean_squared_error(y_train, y_pred_train))
-    rmse_test = np.sqrt(mean_squared_error(y_test, y_pred_test))
+    rmse_train = float(np.sqrt(mean_squared_error(y_train, y_pred_train)))
+    rmse_test = float(np.sqrt(mean_squared_error(y_test, y_pred_test)))
 
     return {"r2_train" : r2_train,
             "r2_test" : r2_test,
@@ -103,7 +104,7 @@ def print_model_evaluation(eval_results: dict):
     print("Test R^2: {rsq:.3f}".format(rsq=eval_results["r2_test"]))
     print()
     print("Training RMSE: {rmse:.3f}".format(rmse=eval_results["rmse_train"]))
-    print("Test RMSE: {rmse:.3f}".format(rmse=eval_results["rmse_test"])) 
+    print("Test RMSE: {rmse:.3f}".format(rmse=eval_results["rmse_test"]))
 
 ########################################################
 # SETUP: TARGET, FEATURES, TRAIN/TEST SPLIT
@@ -119,7 +120,9 @@ X.insert(0, "intercept", ones)
 
 # What are the columns in X?
 # intercept, x1, x2, x3, etc. according to FEATURES
-# print(X.columns)
+print()
+print("========== DESIGN MATRIX X (COMPLETE) ==========")
+print(X.columns)
 
 # Train/test split
 X_train_raw, X_test_raw, y_train, y_test = train_test_split(X, y,
@@ -254,7 +257,7 @@ print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x1_sq})^2".format(b0=b0,
 
 # My formula (takes raw values) and predict() (takes scaled values) should yield the same results
 # formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x1_test_sq[0:10])
-# lr_preds = (lr.predict(X_test[0:10, :])).reshape(-1, 1)
+# lr_preds = (m1q_lr.predict(X_test[0:10, :])).reshape(-1, 1)
 # check_formula(formula_preds=formula_preds, lr_preds=lr_preds)
 
 # Calculate R^2 and RMSE
@@ -311,10 +314,76 @@ fig.savefig("duration.png", format="png")
 plt.close(fig)
 
 ########################################################
-# MODEL 2: TWO NUMERICAL FEATURES
+# MODEL 2: TWO NUMERIC FEATURES
 ########################################################
 
+print()
+print("========== MODEL 2: TWO NUMERIC FEATURES ==========")
 
+# Extract x1 and x2 from raw train and test data
+x1_train = X_train_raw.iloc[:, 1:2].to_numpy()
+x1_test = X_test_raw.iloc[:, 1:2].to_numpy()
+x2_train = X_train_raw.iloc[:, 2:3].to_numpy()
+x2_test = X_test_raw.iloc[:, 2:3].to_numpy()
+
+# Combine x1 and x2 for standardizing
+X_train_two_num = np.concatenate([x1_train, x2_train], axis=1)
+X_test_two_num = np.concatenate([x1_test, x2_test], axis=1)
+
+# Standardize x1 into z-scores
+m2_scaler = StandardScaler()
+m2_scaler.fit(X_train_two_num)
+X_train_scaled = m2_scaler.transform(X_train_two_num)
+X_test_scaled = m2_scaler.transform(X_test_two_num)
+
+# Combine scaled data with intercept from X_train_raw
+X_train = np.concatenate([X_train_raw.iloc[:, 0:1], X_train_scaled],
+                         axis=1)
+X_test = np.concatenate([X_test_raw.iloc[:, 0:1], X_test_scaled],
+                        axis=1)
+
+# Do linear regression
+m2_lr = LinearRegression(fit_intercept=False)
+m2_lr.fit(X_train, y_train)
+
+# Convert learned coefs from z-score to raw
+# Note: indices in scaler are off-by-one compared to lr
+# because lr has intercept while scaler doesn't...
+# scaler.mean_[0] --> mean for x1
+# scaler.mean_[1] --> mean for x2
+# scaler.scale_[0] --> std for x1
+# scaler.scale_[1] --> std for x2
+# lr.coef_[0] --> b0
+# lr.coef_[1] --> b1
+# lr.coef_[2] --> b2
+b0 = m2_lr.coef_[0] - (m2_lr.coef_[1] * m2_scaler.mean_[0] / m2_scaler.scale_[0]) -\
+                      (m2_lr.coef_[2] * m2_scaler.mean_[1] / m2_scaler.scale_[1])
+b1 = m2_lr.coef_[1] / m2_scaler.scale_[0]
+b2 = m2_lr.coef_[2] / m2_scaler.scale_[1]
+
+# Get formula for "y = (coef * intercept) + (coef * x1) + (coef * x2)"
+print()
+print("Formula (no scaled terms):")
+print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x2})^2".format(b0=b0,
+                                                                b1=b1,
+                                                                x1=X_train_raw.columns[1],
+                                                                b2=b2,
+                                                                x2=X_train_raw.columns[2],
+                                                                ))
+
+# My formula (takes raw values) and predict() (takes scaled values) should yield the same results
+# formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x2_test[0:10])
+# lr_preds = (m2_lr.predict(X_test[0:10, :])).reshape(-1, 1)
+# check_formula(formula_preds=formula_preds, lr_preds=lr_preds)
+
+# Calculate R^2 and RMSE
+eval_results = evaluate_model(lr=m1q_lr,
+                              X_train=X_train,
+                              X_test=X_test,
+                              y_train=y_train,
+                              y_test=y_test,
+                              )
+print_model_evaluation(eval_results=eval_results)
 
 ########################################################
 # MODEL 3: ADD CATEGORICAL FEATURE
@@ -326,7 +395,73 @@ plt.close(fig)
 # a baseline will create an idea that key_1 is more
 # or less popular than C songs.
 
+print()
+print("========== MODEL 3: CATEGORICAL FEATURE ==========")
 
+# Extract x1 and x2 from raw train and test data
+x1_train = X_train_raw.iloc[:, 1:2].to_numpy()
+x1_test = X_test_raw.iloc[:, 1:2].to_numpy()
+x2_train = X_train_raw.iloc[:, 2:3].to_numpy()
+x2_test = X_test_raw.iloc[:, 2:3].to_numpy()
+
+# Combine x1 and x2 for standardizing
+X_train_two_num = np.concatenate([x1_train, x2_train], axis=1)
+X_test_two_num = np.concatenate([x1_test, x2_test], axis=1)
+
+# Standardize x1 into z-scores
+m2_scaler = StandardScaler()
+m2_scaler.fit(X_train_two_num)
+X_train_scaled = m2_scaler.transform(X_train_two_num)
+X_test_scaled = m2_scaler.transform(X_test_two_num)
+
+# Combine scaled data with intercept from X_train_raw
+X_train = np.concatenate([X_train_raw.iloc[:, 0:1], X_train_scaled],
+                         axis=1)
+X_test = np.concatenate([X_test_raw.iloc[:, 0:1], X_test_scaled],
+                        axis=1)
+
+# Do linear regression
+m2_lr = LinearRegression(fit_intercept=False)
+m2_lr.fit(X_train, y_train)
+
+# Convert learned coefs from z-score to raw
+# Note: indices in scaler are off-by-one compared to lr
+# because lr has intercept while scaler doesn't...
+# scaler.mean_[0] --> mean for x1
+# scaler.mean_[1] --> mean for x2
+# scaler.scale_[0] --> std for x1
+# scaler.scale_[1] --> std for x2
+# lr.coef_[0] --> b0
+# lr.coef_[1] --> b1
+# lr.coef_[2] --> b2
+b0 = m2_lr.coef_[0] - (m2_lr.coef_[1] * m2_scaler.mean_[0] / m2_scaler.scale_[0]) -\
+                      (m2_lr.coef_[2] * m2_scaler.mean_[1] / m2_scaler.scale_[1])
+b1 = m2_lr.coef_[1] / m2_scaler.scale_[0]
+b2 = m2_lr.coef_[2] / m2_scaler.scale_[1]
+
+# Get formula for "y = (coef * intercept) + (coef * x1) + (coef * x2)"
+print()
+print("Formula (no scaled terms):")
+print("y = {b0:.3f} + {b1:.3f}*{x1} + {b2:.3f}*({x2})^2".format(b0=b0,
+                                                                b1=b1,
+                                                                x1=X_train_raw.columns[1],
+                                                                b2=b2,
+                                                                x2=X_train_raw.columns[2],
+                                                                ))
+
+# My formula (takes raw values) and predict() (takes scaled values) should yield the same results
+# formula_preds = b0 + (b1 * x1_test[0:10]) + (b2 * x2_test[0:10])
+# lr_preds = (m2_lr.predict(X_test[0:10, :])).reshape(-1, 1)
+# check_formula(formula_preds=formula_preds, lr_preds=lr_preds)
+
+# Calculate R^2 and RMSE
+eval_results = evaluate_model(lr=m1q_lr,
+                              X_train=X_train,
+                              X_test=X_test,
+                              y_train=y_train,
+                              y_test=y_test,
+                              )
+print_model_evaluation(eval_results=eval_results)
 
 
 
