@@ -281,5 +281,15 @@ if validate_submission(submission=predictions, len_test=len(test)):
     print("=" * 10, "END PROGRAM", "=" * 10)
     print()
     print("Successfully wrote predictions to:", SUBMISSION_FILENAME)
-    print()
+
+# Get the coefficients of the model
+feature_names = model_pipeline.named_steps["prep"].get_feature_names_out()
+coefs = pd.Series(model_pipeline.named_steps["lr"].coef_[0], index=feature_names)
+intercept = model_pipeline.named_steps["lr"].intercept_[0]
+
+# Print coefficients of the model
+print()
+print("Coefficients of the final model are:")
+print(coefs.sort_values())
+print()
 
