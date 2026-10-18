@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import cross_validate, KFold
-from sklearn.metrics import get_scorer_names, accuracy_score, f1_score, log_loss 
+from sklearn.metrics import accuracy_score, f1_score, log_loss
 
 #####################################################
 # CONSTANTS
@@ -25,7 +25,7 @@ TEST_FILENAME = "test.csv"
 SUBMISSION_FILENAME = "submission.csv"
 
 # Cross validation settings
-SCORING = ["accuracy", "f1", "neg_log_loss"]
+SCORING = ["neg_log_loss"] # also accuracy and f1
 NUM_CV = 10
 
 # Column names for features
@@ -41,17 +41,329 @@ CAT_FEATURES = ["cap_shape",
                 "habitat",
                 "season",
                 ]
-# FINAL_FEATURES = ?
+FINAL_FEATURES = {"num": ["cap_diameter", "stem_width"],
+                  "cat": ["cap_shape", "cap_color", "gill_color", "habitat", "season"],
+                  }
+
+# Models to evaluate
+SCHEMAS = [
+        # all numeric, all cat, all features
+        {"name": "ALL NUMERIC",
+         "num": NUM_FEATURES,
+         "cat": [],
+         },
+        {"name": "ALL CATEGORICAL",
+         "num": [],
+         "cat": CAT_FEATURES,
+         },
+        {"name": "ALL FEATURES",
+         "num": ["cap_diameter", "stem_height", "stem_width"],
+         "cat": ["cap_shape", "cap_color", "does_bruise_or_bleed", "gill_color", "habitat", "season"]
+         },
+        {"name": "FORWARD SELECTION",
+         "num": FINAL_FEATURES["num"],
+         "cat": FINAL_FEATURES["cat"],
+        },
+        ]
 
 #####################################################
 # FUNCTIONS
 #####################################################
 
+def evaluate_basic_model(prob: float, target: pd.Series) -> dict:
+    """
+    Evaluate the a basic model that predicts the same thing.
+
+    Parameters:
+        prob (float): the probability.
+        target (pd.Series): the target.
+
+    Returns:
+        Dictionary: accuracy, f1, neg_log_loss.
+    """
+
+    # Get list of probabilities and predictions
+    probs = [prob for _ in range(len(target))]
+    preds = [1 if prob > 0.5 else 0 for _ in range(len(target))]
+    
+    # Return results
+    return {"accuracy": accuracy_score(target, preds),
+            "f1": f1_score(target, preds),
+            "neg_log_loss": -log_loss(target, probs),
+            }
+
+def print_basic_model(model_name: str,
+                      prob: float,
+                      results: dict,
+                      ) -> None:
+    """
+    Prints the results from the basic model.
+    
+    Parameters:
+        model_name (str): name of the model.
+        prob (float): the constant probability.
+        results (dict): accuracy, f1, neg_log_loss.
+
+    Returns:
+        None. Print statements.
+    """
+
+    # Print settings
+    print()
+    print("=" * 10, model_name, "=" * 10)
+    print()
+    print("*PREDICTION*")
+    print("Probability:", prob)
+    print("Always predict:", 1 if prob > 0.5 else 0)
+    
+    # Print results
+    print()
+    print("*RESULTS*")
+    print("accuracy:", round(results["accuracy"], 6))
+    print("f1:", round(results["f1"], 6))
+    print("neg_log_loss:", round(results["neg_log_loss"], 6))
+
+def build_pipeline(num: list, cat: list) -> Pipeline:
+    """
+    Build a pipeline given the numerical and categorical features.
+
+    Parameters:
+        num (list): numeric feature names.
+        cat (list): categorical feature names.
+
+    Returns:
+        Pipeline.
+    """
+
+    # Create feature transformers
+    transformers = []
+    if num:
+        transformers.append(("num", StandardScaler(), num))
+    if cat:
+        transformers.append(("cat", OneHotEncoder(handle_unknown="ignore", drop="first"), cat))
+
+    # Return pipeline
+    return Pipeline([
+        ("prep", ColumnTransformer(transformers)),
+        ("lr", LogisticRegression(fit_intercept=True)),
+    ])
+
+def evaluate_cross_validation(model: dict,
+                              target: pd.Series,
+                              train: pd.DataFrame,
+                              ) -> dict:
+    """
+    Evaluate logistic regression on the dictionary of models.
+
+    Parameters:
+        model (dict): schema of model names and features.
+        target (pd.Series): the target all models aim for.
+        train (pd.DataFrame): the features.
+
+    Returns:
+        Dict. Returns model results as a dictionary.
+    """
+
+    # Create Pipeline object
+    model_pipeline = build_pipeline(num=model["num"],
+                                    cat=model["cat"],
+                                    )
+
+    # Get list of features
+    features = model["num"] + model["cat"]
+
+    # Do cross validation for a model
+    cv_output = cross_validate(
+            model_pipeline,
+            train[features],
+            target,
+            cv=KFold(NUM_CV, shuffle=True, random_state=SEED),
+            scoring=SCORING,
+            return_estimator=True,
+            )
+
+    # Return scores
+    results = {}
+    for metric_name, values in cv_output.items():
+        if "test_" in metric_name:
+            results[metric_name] = values
+
+    return results
+
+def do_forward_selection(target: pd.Series,
+                         all_train_features: pd.DataFrame,
+                         prior_log_loss: float,
+                         tolerance: float = 0.001,
+                         ) -> tuple:
+    """
+    Perform forward selection for all given features against the target.
+
+    Parameters:
+        target (pd.Series): the target.
+        all_train_features (pd.DataFrame): all the features.
+        prior_log_loss (float): initial log loss to beat.
+        tolerance (float): when to stop forward selection.
+    
+    Returns:
+        Tuple: (selected features, history).
+    """
+
+    print()
+    print("=" * 10, "FORWARD SELECTION PROCESS", "=" * 10)
+
+    # Track selected features
+    selected = []
+    candidate_features = NUM_FEATURES + CAT_FEATURES
+
+    # Track best feature and log losses
+    overall_best_log_loss = prior_log_loss
+
+    # Return history of features
+    history = []
+
+    # Begin adding candidate features one round at a time
+    done = False
+    counter = 1
+    while (not done) and (candidate_features):
+
+        # Track the best log loss and feature for a round
+        round_best_log_loss = -10
+        round_best_feature = ""
+
+        # Loop through candidate features
+        for candidate in candidate_features:
+
+            # Get features for a model
+            current_features = selected + [candidate]
+            model = {"num": [feat for feat in current_features if feat in NUM_FEATURES],
+                     "cat": [feat for feat in current_features if feat in CAT_FEATURES],
+                     }
+
+            # Evaluate whether average log loss of model beat the round's best
+            scores = evaluate_cross_validation(model=model,
+                                               target=target,
+                                               train=all_train_features,
+                                               )
+            avg_log_loss = np.average(scores["test_neg_log_loss"])
+            if avg_log_loss > round_best_log_loss:
+                round_best_log_loss = avg_log_loss
+                round_best_feature = candidate
+
+        # Evaluate whether the round's best log loss beat the overall log loss
+        difference = round_best_log_loss - overall_best_log_loss
+        if difference < tolerance:
+            done = True
+        else:
+            overall_best_log_loss = round_best_log_loss
+            selected.append(round_best_feature)
+            candidate_features.remove(round_best_feature)
+            history.append({"feature_added": round_best_feature, "neg_log_loss": overall_best_log_loss})
+            print()
+            print("Round ", counter)
+            print(history[-1])
+
+        # Update the counter
+        counter += 1
+
+    return (selected, history)
+
+# def print_evaluation_results(models: list,
+#                              results: list,
+#                              ) -> None:
+#     """
+#     Print evaluation results neatly.
+
+#     Parameters:
+#         models (list): schema of model names and features.
+#         results (list): parallel list of model results.
+
+#     Returns:
+#         None. Print statements.
+#     """
+
+#     for model, scores in zip(models, results):
+#         # Print model name and features
+#         print()
+#         print("=" * 10, "LOGISTIC REGRESSION:", model["name"], "=" * 10)
+#         print()
+#         print("*FEATURES*")
+#         print(model["num"] + model["cat"])
+#         print()
+#         print("*RESULTS (greater is better)*")
+
+#         # Print results
+#         print()
+#         for metric_name, values in scores.items():
+#             print()
+#             print("average "+metric_name+":", round(np.average(values), 6))
+#             if "neg_log_loss" in metric_name:
+#                 print("range test_neg_log_loss:", round([max(values) - min(values), 6]))
+
+def print_worst_results(models: list, results: list) -> None:
+    """
+    Print the models with the best performances.
+
+    Parameters:
+        models (list): schema of model names and features.
+        results (list): parallel list of model results.
+    
+    Returns:
+        None. Print statements.
+    """
+
+    # Find max scores and log loss spread of each model
+    model_stats = []
+    for model in results:
+        stats = {}
+        for metric_name, values in model.items():
+            stats[metric_name] = np.average(values)
+            if "neg_log_loss" in metric_name:
+                stats["range test_neg_log_loss"] = max(values) - min(values)
+        model_stats.append(stats)
+
+    # Get maxes as a df
+    stats_df = pd.DataFrame(model_stats, index=[model["name"] for model in models])
+
+    # Print results
+    print()
+    print("=" * 10, "WORST LOG LOSS", "=" * 10)
+    print()
+    for metric_name in stats_df.columns:
+        print()
+        if "range" in metric_name:
+            print("Worst "+metric_name+":", round(stats_df[metric_name].max(), 6))
+        else:
+            print("Worst "+metric_name+":", round(stats_df[metric_name].min(), 6))
+        print("Model:", stats_df[metric_name].idxmin())
+    print()
+    print(stats_df)
+
+def get_betas(model_pipeline: Pipeline) -> tuple:
+    """
+    Get intercept and coefficients of a model.
+
+    Parameters:
+        model_pipeline: Pipeline for a model.
+
+    Returns:
+        Tuple: (intercept, coefs)
+    """
+    
+    # Get feature names for indexing
+    feature_names = model_pipeline.named_steps["prep"].get_feature_names_out()
+
+    # Get intercept and coefficients
+    intercept = model_pipeline.named_steps["lr"].intercept_[0]
+    coefs = pd.Series(model_pipeline.named_steps["lr"].coef_[0], index=feature_names)
+
+    # Return
+    return (intercept, coefs)
+
 def validate_submission(submission: pd.DataFrame,
                         len_test: int,
                         ) -> True:
     """
-    Assert statements verify that submission is valid.
+    Assert statements verify that submission is in valid format.
 
     Parameters:
         submission (pd.DataFrame): the DataFrame of mushroom
@@ -78,95 +390,17 @@ def validate_submission(submission: pd.DataFrame,
 
     return True
 
-def evaluate_model(probs: np.ndarray,
-                   target: pd.Series,
-                   ) -> tuple:
-    """
-    Evaluate accuracy, F1, and cross entropy loss of a model.
-    
-    Parameters:
-        probs (list): prediction probabilities of the model.
-        target (pd.Series): the true class labels.
-
-    Returns:
-        Tuple: accuracy, F1 score, negative log loss
-    """
-    
-    # Get class predictions from the probabilities
-    preds = [1 if prior > 0.5 else 0 for _ in range(len(target))]
-
-    # Return accuracy, f1_score, and neg_log_loss
-    return (accuracy_score(target, preds),
-            f1_score(target, preds),
-            log_loss(target, probs),
-            )
-    
-def evaluate_cross_validation(preprocess: ColumnTransformer,
-                                 model_name: str,
-                                 chosen_feature_names: list,
-                                 target: pd.Series,
-                                 features: pd.DataFrame,
-                                 ) -> None:
-    """
-    Take preprocessed features and evaluate logistic regression.
-
-    Parameters:
-        preprocess (ColumnTransformer): features to be scaled
-            or encoded according to column name.
-        model_name (str): short name to describe the model.
-        chosen_feature_names (list): the names of the features.
-        target (pd.Series): the target.
-        features (pd.DataFrame): the features as a DataFrame.
-
-    Returns:
-        None. Print statements of evaluation.
-    """
-
-    # Create Pipeline object
-    model_pipeline = Pipeline([
-        ("prep", preprocess),
-        ("lr", LogisticRegression(fit_intercept=True)),
-        ])
-
-    # Do cross validation
-    results = cross_validate(
-            model_pipeline,
-            features,
-            target,
-            cv=KFold(NUM_CV, shuffle=True, random_state=SEED),
-            scoring=SCORING,
-            return_estimator=True,
-            )
-
-    # Print settings
-    print()
-    print("=" * 10, "LOGISTIC REGRESSION:", model_name, "=" * 10)
-    print()
-    print("*SETTINGS*")
-    print("Num CV folds:", NUM_CV)
-    print("Features:", chosen_feature_names)
-
-    # Print results
-    print()
-    print("*RESULTS (greater is better)*")
-    for metric in SCORING:
-        print()
-        print("min test_"+metric+":", round(min(results["test_"+metric]), 6))
-        print("max test_"+metric+":", round(max(results["test_"+metric]), 6))
-        print("average test_"+metric+":", round(np.average(results["test_"+metric]), 6))
-        #print("test_"+metric+":", list(np.around(results["test_"+metric], 6)))
-
 #####################################################
 # LOAD DATA
 #####################################################
 
-# Load data
+# Load datacoefficients
 train = pd.read_csv(TRAIN_FILENAME)
 test = pd.read_csv(TEST_FILENAME)
 
 # Get target and all features
 target = train[TARGET]
-all_train_features = train.drop(columns=TARGET)
+all_train_features = train[NUM_FEATURES + CAT_FEATURES]
 
 # Check scoring metrics available in CV
 # print(get_scorer_names())
@@ -175,99 +409,84 @@ all_train_features = train.drop(columns=TARGET)
 # THE BASELINE: PREDICT THE BASELINE
 #####################################################
 
-print()
-print("=" * 10, "THE BASELINE", "=" * 10)
-print()
-print("Baseline:", 0.5)
-print()
-print("neg_log_loss:", log_loss(target, [0.5 for _ in range(len(target))]))
+# Baseline for any logistic regression is 0.5 probability
+BASELINE = 0.5
+
+# Evaluate baseline model
+baseline_results = evaluate_basic_model(prob=BASELINE, target=target)
+
+# Print results for baseline model
+print_basic_model(model_name="THE BASELINE",
+                  prob=BASELINE,
+                  results=baseline_results,
+                  )
 
 #####################################################
 # THE PRIOR: PREDICT MAJORITY CLASS
 #####################################################
 
-# Note: no train and validate split needed since
-# this model only uses one parameter.
-
 # Calculate the prior: num_poisonous / total
 prior = len(target[target == 1]) / len(target)
 
-# Get list of probabilities 
-prior_probs = [prior for _ in range(len(target))]
-
 # Evaluate the prior
-prior_accuracy, prior_f1_score, prior_log_loss = \
-        evaluate_model(probs=prior_probs,
-                       target=target,
-                       )
+prior_results = evaluate_basic_model(prob=prior, target=target)
 
-# Print the settings and results
-print()
-print("=" * 10, "THE PRIOR", "=" * 10)
-print()
-print("*SETTINGS*")
-print("Prior: num_poisonous / total = {prior:.5f}".format(prior=prior))
-print()
-print("*RESULTS (closer to 1 is better)*")
-print("accuracy:", prior_accuracy)
-print("f1_score:", prior_f1_score)
-print("neg_log_loss:", -prior_log_loss)
-
-# Consider what happens when you always predict 1 like prior_preds do...
+# Print results for the prior
+print_basic_model(model_name="THE PRIOR",
+                  prob=prior,
+                  results=prior_results,
+                  )
 
 #####################################################
 # DO LOGISTIC REGRESSION WITH CROSS VALIDATION
 #####################################################
 
-# Note: no train and validate split needed since
-# this evaluation uses cross validation.
+# Do forward feature selection
+best_features, history = do_forward_selection(target=target,
+                                              all_train_features=all_train_features,
+                                              prior_log_loss=prior_results["neg_log_loss"],
+                                              )
 
-# Model: all numeric
-prep_num_features = ColumnTransformer([
-    ("num", StandardScaler(), NUM_FEATURES),
-    ])
-evaluate_cross_validation(preprocess=prep_num_features,
-                             model_name="ALL NUMERIC",
-                             chosen_feature_names=NUM_FEATURES,
-                             target=target,
-                             features=all_train_features[NUM_FEATURES],
-                             )
+print()
+print("Best features:")
+print(best_features)
 
-# Model: all categorical
-prep_cat_features = ColumnTransformer([
-    ("cat", OneHotEncoder(handle_unknown="ignore", drop="first"), CAT_FEATURES),
-    ])
-evaluate_cross_validation(preprocess=prep_cat_features,
-                             model_name="ALL CATEGORICAL",
-                             chosen_feature_names=CAT_FEATURES,
-                             target=target,
-                             features=all_train_features[CAT_FEATURES],
-                             )
+# Fill parallel list of model scores
+results = []
+for model in SCHEMAS:
+    scores = evaluate_cross_validation(model=model,
+                                       target=target,
+                                       train=all_train_features,
+                                       )
+    results.append(scores)
+
+# Print all of the results
+# print_evaluation_results(models=SCHEMAS,
+#                          results=results,
+#                          )
+
+# Print best models in the results
+print_worst_results(models=SCHEMAS,
+                    results=results,
+                    )
 
 #####################################################
 # PREDICT ON TEST SET AND SUBMIT
 #####################################################
 
-# TODO:
-# Fill FINAL_FEATURES
-# FIll prep_final_features
-# Replace NUM_FEATURES with FINAL_FEATURES
-
 # Create final model pipeline object
-prep_final_features = ColumnTransformer([
-    ("num", StandardScaler(), NUM_FEATURES),
-    ])
+model_pipeline = build_pipeline(num=FINAL_FEATURES["num"],
+                                cat=FINAL_FEATURES["cat"],
+                                )
 
-model_pipeline = Pipeline([
-    ("prep", prep_final_features),
-    ("lr", LogisticRegression(fit_intercept=True)),
-    ])
+# Combine FINAL_FEATURES into a list
+list_final_features = FINAL_FEATURES["num"] + FINAL_FEATURES["cat"]
 
 # Actually train the model on training data
-model_pipeline.fit(train[NUM_FEATURES], target)
+model_pipeline.fit(train[list_final_features], target)
 
 # Scale and encode test data, predict probabilities on test data
-p_poisonous = model_pipeline.predict_proba(test[NUM_FEATURES])[:, 1]
+p_poisonous = model_pipeline.predict_proba(test[list_final_features])[:, 1]
 
 # Create df for submission
 predictions = pd.DataFrame({
@@ -283,13 +502,23 @@ if validate_submission(submission=predictions, len_test=len(test)):
     print("Successfully wrote predictions to:", SUBMISSION_FILENAME)
 
 # Get the coefficients of the model
-feature_names = model_pipeline.named_steps["prep"].get_feature_names_out()
-coefs = pd.Series(model_pipeline.named_steps["lr"].coef_[0], index=feature_names)
-intercept = model_pipeline.named_steps["lr"].intercept_[0]
+intercept, coefs = get_betas(model_pipeline=model_pipeline)
+
+# Print final features picked
+print()
+print("Final features:")
+print("num:", FINAL_FEATURES["num"])
+print("cat:", FINAL_FEATURES["cat"])
 
 # Print coefficients of the model
+# Note:
+# - The sign indicates pos/neg correlation.
+# - The magnitude indicates how much the target is
+#       influenced by a one-unit change in a feature,
+#       holding other features constant.
+print()
+print("Intercept:", round(intercept, 6))
 print()
 print("Coefficients of the final model are:")
 print(coefs.sort_values())
 print()
-

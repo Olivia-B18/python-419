@@ -1,0 +1,4 @@
+kaggle competitions submit \
+    -c data-419-mushroom-madness \
+    -f ~/Code/python-419/homework2/submission.csv \
+    -m "<the_message>"
