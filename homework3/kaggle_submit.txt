@@ -1,0 +1,4 @@
+kaggle competitions submit \
+    -c data-419-whats-in-a-name \
+    -f submission.csv \
+    -m "<message>"
