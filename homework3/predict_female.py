@@ -160,7 +160,7 @@ def build_pipeline(num: list, cat: list) -> Pipeline:
                                   C=1.0,                # strength of regularization (smaller is stronger)
                                   l1_ratio=1,           # lasso regression
                                   solver="liblinear",   # optimization algorithm, fast for small datasets
-                                  max_iter=1000,        # solver needs +100 iterations
+                                  random_state=SEED,    # set seed
                                   )),
     ])
 
@@ -236,7 +236,6 @@ def print_cv_results(models: list, results: list) -> None:
     # Print results
     print()
     print("=" * 10, "LOG LOSS RESULTS", "=" * 10)
-    print()
     for metric_name in stats_df.columns:
         print()
         print("Smallest "+metric_name+":", round(stats_df[metric_name].min(), 6))
@@ -317,9 +316,9 @@ train = create_features(initial_df=train[[NAME]])
 test = create_features(initial_df=test[[ID, NAME]])
 
 # Print training feature
-print()
-print("=" * 10, "RAW TRAINING DATA", "=" * 10)
-print(train.head(5))
+# print()
+# print("=" * 10, "RAW TRAINING DATA", "=" * 10)
+# print(train.head(5))
 
 ###################################################################################
 # THE BASELINE: PREDICT THE BASELINE
@@ -359,14 +358,12 @@ for model in SCHEMAS:
                                        )
     results.append(scores)
 
-print(results)
-
 print_cv_results(models=SCHEMAS,
                  results=results,
                  )
 
 ###################################################################################
-# PREDICT ON TEST AND SUBMIT
+# PREDICT ON TEST SET
 ###################################################################################
 
 # Create final model pipeline object
@@ -389,17 +386,12 @@ predictions = pd.DataFrame({
     "female": p_female,
 })
 
-# Assert the df is valid
-if validate_submission(submission=predictions, len_test=len(test)):
-    print()
-    print("=" * 10, "END PROGRAM", "=" * 10)
-    print()
-    print("Successfully wrote predictions to:", SUBMISSION_FILENAME)
-
 # Get the coefficients of the model
 intercept, coefs = get_betas(model_pipeline=model_pipeline)
 
 # Print final features picked
+print()
+print("=" * 10, "FINAL MODEL ANALYSIS", "=" * 10)
 print()
 print("Final features:")
 print("num:", FINAL_FEATURES["num"])
@@ -416,4 +408,15 @@ print("Intercept:", round(intercept, 6))
 print()
 print("Coefficients of the final model are:")
 print(coefs.sort_values())
-print()
+
+###################################################################################
+# MAKE SUBMISSION
+###################################################################################
+
+# Assert the df is valid and make submission
+if validate_submission(submission=predictions, len_test=len(test)):
+    print()
+    print("=" * 10, "END PROGRAM", "=" * 10)
+    print()
+    print("Successfully wrote predictions to:", SUBMISSION_FILENAME)
+    print()
