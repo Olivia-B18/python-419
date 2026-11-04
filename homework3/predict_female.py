@@ -72,8 +72,8 @@ BINARY_FEATURES = [
 ]
 CAT_FEATURES = LETTER_FEATURES + BINARY_FEATURES
 FINAL_FEATURES = {
-    "num": ["length", "vowel_ratio"],
-    "cat": ["first_letter", "last_letter"],
+    "num": NUM_FEATURES,
+    "cat": CAT_FEATURES,
 }
 
 # Models to evaluate
