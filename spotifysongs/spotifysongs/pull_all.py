@@ -41,7 +41,7 @@ SCHEMA = {
         "target_cols": [
             "track_id",
             "artists",
-            "song",
+            "title",
             "album",
             "genre",
         ],
@@ -123,7 +123,7 @@ SCHEMA = {
 REQ_COMMON_COLS= {
         "track_id",
         "artists",
-        "song",
+        "title",
         "popularity",
         "duration_ms",
         "danceability",
@@ -313,7 +313,7 @@ col_names_map = {
         "artist_name": "artists",
         "track_genre": "genre",
         "album_name": "album",
-        "track_name": "song",
+        "track_name": "title",
         }
 
 df1 = df1.rename(columns=col_names_map)

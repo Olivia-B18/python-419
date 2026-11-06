@@ -68,7 +68,7 @@ print("========== GENRE COLUMNS ==========")
 print()
 
 print("Number of one-hot genre columns: ", len(genre_cols))
-print("Genre column names: ", songs[genre_cols].columns)
+# print("Genre column names: ", songs[genre_cols].columns)
 
 print()
 print("Genre columns statstics:")
