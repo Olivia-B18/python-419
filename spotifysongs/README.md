@@ -67,7 +67,8 @@ columns may be 1 for a given row.
 
 2. **Time Signature.** Time signature is one-hot encoded as 5 columns
 named `time_signature_<name>` (i.e. `time_signature_3`,
-`time_signature_4`, ..., `time_signature_7`).
+`time_signature_4`, ..., `time_signature_7`). Invalid time signatures 0 and 1
+were dropped. Time signatures 6 and 7 are valid but not in this dataset.
 
 3. **Key.** Keys are recorded using pitch notation and are one-hot
 encoded as 12 columns named `key_<name>` f(i.e. `key_0`, `key_1`, ...,
