@@ -340,7 +340,7 @@ r2_scores = grid.cv_results_["mean_test_score"]
 ax.plot(n_comps, r2_scores, marker="o", color="purple")
 ax.set_xlabel("Number of Components")
 ax.set_ylabel("Mean cross-validation R^2")
-fig.suptitle("Accuracy as Number of Components Changes")
+fig.suptitle("R^2 as Number of Components Changes")
 fig.tight_layout(h_pad=2)
 fig.savefig("pcr_r2.png")
 plt.close(fig)

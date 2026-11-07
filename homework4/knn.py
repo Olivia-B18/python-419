@@ -111,11 +111,11 @@ def build_pipeline(model_type: str,
         return None        
 
 ###################################################################################
-# PART 1: DRAW KNN DECISION BOUNDARIES
+# PART 1: DRAW KNN DECISION REGIONS
 ###################################################################################
 
 print()
-print("=" * 10, "PART 1: DECISION BOUNDARIES", "=" * 10)
+print("=" * 10, "PART 1: DECISION REGIONS", "=" * 10)
 
 # Split target from features
 cat_target = songs[CAT_TARGET]
@@ -130,7 +130,7 @@ fig, ax = plt.subplots(nrows=len(k_values), ncols=1, figsize=(10, 3 * len(k_valu
 # Get color map
 cmap = plt.get_cmap("viridis_r")
 
-# Fill plot with decision boundaries
+# Fill plot with decision regions
 for i in range(len(k_values)):
 
     # Get KNN pipeline
@@ -143,7 +143,7 @@ for i in range(len(k_values)):
     # Fit pipeline
     knn_pipeline.fit(features_df, cat_target)
 
-    # Get decision boundaries
+    # Get decision regions
     DecisionBoundaryDisplay.from_estimator(
         knn_pipeline,
         features_df,
@@ -173,13 +173,13 @@ fig.legend(handles=[
         Patch(color=cmap(0.0), label="minor"),
         Patch(color=cmap(1.0), label="major"),
     ])
-fig.suptitle("Decision Boundaries as k-value Changes")
+fig.suptitle("Decision Regions as k-value Changes")
 fig.tight_layout(h_pad=2)
-fig.savefig("decision_boundaries.png")
+fig.savefig("decision_regions.png")
 plt.close(fig)
 
 print()
-print("Successfully saved 'decision_boundaries.png'...")
+print("Successfully saved 'decision_regions.png'...")
 
 ###################################################################################
 # PART 2: FIND GOOD K-VALUE
@@ -236,7 +236,7 @@ ax.set_xlabel("Number of Neighbors")
 ax.set_ylabel("Mean cross-validation accuracy")
 fig.suptitle("Accuracy as k-value Changes")
 fig.tight_layout(h_pad=2)
-fig.savefig("accuracy.png")
+fig.savefig("knn_accuracy.png")
 plt.close(fig)
 
 print()
